@@ -1,100 +1,89 @@
-"server-only";
+import Airtable from 'airtable';
 
-import { genSaltSync, hashSync } from "bcrypt-ts";
-import { desc, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+// Initialize Airtable base (assuming base configuration is in a separate airtable.ts file)
+import { base } from '../airtable';
 
-import { user, chat, User } from "./schema";
-
-// Optionally, if not using email/pass login, you can
-// use the Drizzle adapter for Auth.js / NextAuth
-// https://authjs.dev/reference/adapter/drizzle
-let client = postgres(`${process.env.POSTGRES_URL!}?sslmode=require`);
-let db = drizzle(client);
-
-export async function getUser(email: string): Promise<Array<User>> {
-  try {
-    return await db.select().from(user).where(eq(user.email, email));
-  } catch (error) {
-    console.error("Failed to get user from database");
-    throw error;
-  }
-}
-
-export async function createUser(email: string, password: string) {
-  let salt = genSaltSync(10);
-  let hash = hashSync(password, salt);
-
-  try {
-    return await db.insert(user).values({ email, password: hash });
-  } catch (error) {
-    console.error("Failed to create user in database");
-    throw error;
-  }
-}
-
-export async function saveChat({
-  id,
-  messages,
-  userId,
-}: {
+export type User = {
   id: string;
-  messages: any;
+  email: string;
+  password: string;
+};
+
+export type Chat = {
+  id: string;
   userId: string;
-}) {
+  message: string;
+  createdAt: string;
+};
+
+// Function to delete a chat by ID
+export const deleteChatById = async (chatId: string): Promise<void> => {
   try {
-    const selectedChats = await db.select().from(chat).where(eq(chat.id, id));
+    await base('Chats').destroy([chatId]);
+    console.log(`Chat with ID ${chatId} deleted successfully.`);
+  } catch (error) {
+    console.error('Error deleting chat:', error);
+    throw error;
+  }
+};
 
-    if (selectedChats.length > 0) {
-      return await db
-        .update(chat)
-        .set({
-          messages: JSON.stringify(messages),
-        })
-        .where(eq(chat.id, id));
-    }
+// Function to get a chat by ID
+export const getChatById = async (chatId: string): Promise<Chat | null> => {
+  try {
+    const record = await base('Chats').find(chatId);
+    return {
+      id: record.id,
+      userId: record.fields.userId as string,
+      message: record.fields.message as string,
+      createdAt: record.fields.createdAt as string,
+    };
+  } catch (error) {
+    console.error('Error fetching chat by ID:', error);
+    return null;
+  }
+};
 
-    return await db.insert(chat).values({
-      id,
-      createdAt: new Date(),
-      messages: JSON.stringify(messages),
-      userId,
+// Function to save a new chat
+export const saveChat = async (chatData: Partial<Chat>): Promise<Chat> => {
+  try {
+    const record = await base('Chats').create({
+      userId: chatData.userId,
+      message: chatData.message,
+      createdAt: new Date().toISOString(),
     });
+    return {
+      id: record.id,
+      userId: record.fields.userId as string,
+      message: record.fields.message as string,
+      createdAt: record.fields.createdAt as string,
+    };
   } catch (error) {
-    console.error("Failed to save chat in database");
+    console.error('Error saving chat:', error);
     throw error;
   }
-}
+};
 
-export async function deleteChatById({ id }: { id: string }) {
+// Function to fetch a user by ID
+export async function getUser(userId: string): Promise<User | null> {
   try {
-    return await db.delete(chat).where(eq(chat.id, id));
-  } catch (error) {
-    console.error("Failed to delete chat by id from database");
-    throw error;
-  }
-}
+    const records = await base('Users')
+      .select({
+        filterByFormula: `{id} = '${userId}'`,
+        maxRecords: 1,
+      })
+      .firstPage();
 
-export async function getChatsByUserId({ id }: { id: string }) {
-  try {
-    return await db
-      .select()
-      .from(chat)
-      .where(eq(chat.userId, id))
-      .orderBy(desc(chat.createdAt));
+    if (records.length > 0) {
+      const fields = records[0].fields;
+      return {
+        id: records[0].id,
+        email: fields.email as string,
+        password: fields.password as string,
+      };
+    }
+    return null;
   } catch (error) {
-    console.error("Failed to get chats by user from database");
-    throw error;
-  }
-}
-
-export async function getChatById({ id }: { id: string }) {
-  try {
-    const [selectedChat] = await db.select().from(chat).where(eq(chat.id, id));
-    return selectedChat;
-  } catch (error) {
-    console.error("Failed to get chat by id from database");
+    console.error('Error fetching user:', error);
     throw error;
   }
 }

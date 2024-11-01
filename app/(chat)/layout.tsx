@@ -1,22 +1,16 @@
-import { cookies } from 'next/headers';
+import { ClerkProvider } from '@clerk/nextjs'
+import { cookies } from 'next/headers'
+import { ClientLayout } from './client-layout'
+import { auth } from '../(auth)/auth'
 
-import { AppSidebar } from '@/components/custom/app-sidebar';
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-
-import { auth } from '../(auth)/auth';
-
-export default async function Layout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const [session, cookieStore] = await Promise.all([auth(), cookies()]);
-  const isCollapsed = cookieStore.get('sidebar:state')?.value !== 'true';
+export default function ChatLayout({ children }: { children: React.ReactNode }) {
+  const cookieStore = cookies()
 
   return (
-    <SidebarProvider defaultOpen={!isCollapsed}>
-      <AppSidebar user={session?.user} />
-      <SidebarInset>{children}</SidebarInset>
-    </SidebarProvider>
-  );
+    <ClerkProvider>
+      <ClientLayout>
+        {children}
+      </ClientLayout>
+    </ClerkProvider>
+  )
 }

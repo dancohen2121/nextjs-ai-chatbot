@@ -1,9 +1,17 @@
-import NextAuth from "next-auth";
+import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
 
-import { authConfig } from "@/app/(auth)/auth.config";
+const isPublicRoute = createRouteMatcher(['/sign-in(.*)', '/sign-up(.*)']);
 
-export default NextAuth(authConfig).auth;
+export default clerkMiddleware(async (authPromise, request) => {
+  if (!isPublicRoute(request)) {
+    // Await the auth promise to get ClerkMiddlewareAuthObject
+    const auth = await authPromise;
+
+    // Now you can access protect() method
+    auth.protect();
+  }
+});
 
 export const config = {
-  matcher: ["/", "/:id", "/api/:path*", "/login", "/register"],
+  matcher: ['/((?!.*\\..*|_next).*)', '/', '/(api|trpc)(.*)'],
 };

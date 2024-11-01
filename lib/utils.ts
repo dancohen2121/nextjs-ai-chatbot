@@ -10,13 +10,13 @@ import { twMerge } from "tailwind-merge";
 
 import { Chat } from "@/db/schema";
 
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
 interface ApplicationError extends Error {
   info: string;
   status: number;
+}
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
 }
 
 export const fetcher = async (url: string) => {

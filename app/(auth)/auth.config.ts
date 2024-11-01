@@ -1,39 +1,38 @@
-import { NextAuthConfig } from "next-auth";
+import { clerkMiddleware } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
 
-export const authConfig = {
-  pages: {
-    signIn: "/login",
-    newUser: "/",
-  },
-  providers: [
-    // added later in auth.ts since it requires bcrypt which is only compatible with Node.js
-    // while this file is also used in non-Node.js environments
-  ],
-  callbacks: {
-    authorized({ auth, request: { nextUrl } }) {
-      let isLoggedIn = !!auth?.user;
-      let isOnChat = nextUrl.pathname.startsWith("/");
-      let isOnRegister = nextUrl.pathname.startsWith("/register");
-      let isOnLogin = nextUrl.pathname.startsWith("/login");
+export const config = {
+  matcher: ["/((?!_next|favicon.ico|_next/static|.*\\..*).*)"],
+};
 
-      if (isLoggedIn && (isOnLogin || isOnRegister)) {
-        return Response.redirect(new URL("/", nextUrl));
-      }
+// Define routes that are public
+const publicRoutes = ["/", "/sign-in", "/sign-up"];
 
-      if (isOnRegister || isOnLogin) {
-        return true; // Always allow access to register and login pages
-      }
+export default clerkMiddleware({
+  afterSignInUrl: "/dashboard",
+  afterSignUpUrl: "/dashboard",
+  publicRoutes,
+});
 
-      if (isOnChat) {
-        if (isLoggedIn) return true;
-        return false; // Redirect unauthenticated users to login page
-      }
+// Middleware function to handle additional redirect logic
+export function middleware(req) {
+  const { userId } = req.nextauth;
 
-      if (isLoggedIn) {
-        return Response.redirect(new URL("/", nextUrl));
-      }
+  // Get the current path
+  const path = req.nextUrl.pathname;
 
-      return true;
-    },
-  },
-} satisfies NextAuthConfig;
+  // Redirect logged-in users away from login and sign-up pages
+  if (userId && (path === "/sign-in" || path === "/sign-up")) {
+    return NextResponse.redirect(new URL("/dashboard", req.url));
+  }
+
+  // Redirect unauthenticated users trying to access non-public routes
+  if (!userId && !publicRoutes.includes(path)) {
+    const signInUrl = new URL("/sign-in", req.url);
+    signInUrl.searchParams.set("redirect_url", req.nextUrl.pathname);
+    return NextResponse.redirect(signInUrl);
+  }
+
+  // Allow access to requested page
+  return NextResponse.next();
+}
